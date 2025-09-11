@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <!-- SMTP Configuration Card -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-server me-2"></i>SMTP Configuration</h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="testSMTP()">
+                    <i class="fas fa-paper-plane me-1"></i>Test
+                </button>
+            </div>
+            <div class="card-body">
+                <form id="smtpForm">
+                    <div class="mb-3">
+                        <label for="host" class="form-label">SMTP Host</label>
+                        <input type="text" class="form-control" id="host" placeholder="smtp.gmail.com" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="port" class="form-label">Port</label>
+                        <input type="number" class="form-control" id="port" value="587" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="email" class="form-control" id="username" placeholder="your-email@gmail.com" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" placeholder="App Password" required>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="use_tls" checked>
+                            <label class="form-check-label" for="use_tls">Use TLS</label>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i>Save Config
+                        </button>
+                        <button type="button" class="btn btn-danger" onclick="clearSMTPConfig()">
+                            <i class="fas fa-trash me-1"></i>Clear
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Composer Card -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-edit me-2"></i>Send Tracked Email</h5>
+            </div>
+            <div class="card-body">
+                <form id="emailForm">
+                    <div class="mb-3">
+                        <label for="subject" class="form-label">Subject</label>
+                        <input type="text" class="form-control" id="subject" placeholder="Email Subject" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="emails" class="form-label">Recipients</label>
+                        <textarea class="form-control" id="emails" rows="3"
+                                  placeholder="email1@example.com&#10;email2@example.com&#10;email3@example.com" required></textarea>
+                        <div class="form-text">Enter one email per line</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="body" class="form-label">Email Body</label>
+                        <textarea class="form-control" id="body" rows="6"
+                                  placeholder="Your email content here..." required></textarea>
+                        <div class="form-text">HTML content supported. Tracking pixel will be added automatically.</div>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="fas fa-paper-plane me-1"></i>Send Emails
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Send Results Modal -->
+<div class="modal fade" id="resultsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Send Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="sendResults"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Email Modal -->
+<div class="modal fade" id="testModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Test SMTP Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="testEmail" class="form-label">Test Email Address</label>
+                    <input type="email" class="form-control" id="testEmail" placeholder="test@example.com" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="sendTestEmail()">Send Test</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

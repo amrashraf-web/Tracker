@@ -1,0 +1,189 @@
+:root {
+    --primary-color: #0d6efd;
+    --success-color: #198754;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #0dcaf0;
+    --light-color: #f8f9fa;
+    --dark-color: #212529;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+.navbar-brand {
+    font-weight: 600;
+}
+
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.btn {
+    border-radius: 0.375rem;
+    font-weight: 500;
+}
+
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(13, 110, 253, 0.05);
+}
+
+.status-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+}
+
+.status-opened {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.status-not-opened {
+    background-color: var(--secondary);
+    color: white;
+}
+
+.tracking-id {
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    background-color: var(--light-color);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid #dee2e6;
+}
+
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .container {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+    .card-body {
+        padding: 1rem 0.75rem;
+    }
+
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--light-color);
+}
+
+::-webkit-scrollbar-thumb {
+    background: #adb5bd;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #6c757d;
+}
+/* Modal enhancements */
+.modal-lg {
+    max-width: 800px;
+}
+
+.table-success {
+    background-color: rgba(25, 135, 84, 0.1);
+}
+
+.tracking-details-email {
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.tracking-details-email:hover {
+    color: var(--primary-color) !important;
+    text-decoration: underline;
+}
+
+/* Enhanced tracking ID styling */
+.tracking-id {
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    background-color: var(--light-color);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid #dee2e6;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.tracking-id:hover {
+    background-color: #e9ecef;
+}
+
+/* Time ago styling */
+.time-ago {
+    font-style: italic;
+    color: #6c757d;
+}
+.location-link {
+    color: #dc3545;
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: color 0.2s ease;
+}
+
+.location-link:hover {
+    color: #c82333;
+    text-decoration: underline;
+}
+
+.location-cell {
+    min-width: 120px;
+}
+
+.location-cell small {
+    font-size: 0.75rem;
+    line-height: 1.2;
+    display: block;
+    margin-top: 2px;
+}
+
+.btn-group,
+.btn-group-vertical {
+    position: relative;
+    display: inline-flex;
+    vertical-align: middle;
+    align-content: space-between;
+    justify-content: center;
+    flex-direction: column;
+    flex-wrap: wrap;
+}

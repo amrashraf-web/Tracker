@@ -1,0 +1,39 @@
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=mysql+pymysql://tracker:tracker@db:3306/simple_tracker
+    volumes:
+      - .:/app
+    working_dir: /app
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: simple_tracker
+      MYSQL_USER: tracker
+      MYSQL_PASSWORD: tracker
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    restart: always
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+    ports:
+      - "8080:80"   # change host port to avoid conflict
+    depends_on:
+      - db
+
+
+volumes:
+  mysql_data:

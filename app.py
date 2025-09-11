@@ -149,6 +149,7 @@ class EmailTracking(db.Model):
     open_count = db.Column(db.Integer, default=0)
     click_count = db.Column(db.Integer, default=0)
     last_open_time = db.Column(db.DateTime, nullable=True)
+    last_click_time = db.Column(db.DateTime, nullable=True)
     last_ip = db.Column(db.String(100), nullable=True)
     last_port = db.Column(db.String(10), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: get_egypt_time().replace(tzinfo=None))
@@ -162,6 +163,7 @@ class EmailTracking(db.Model):
             'open_count': self.open_count,
             'click_count': self.click_count,
             'last_open_time': to_egypt_dict_time(self.last_open_time),
+            'last_click_time': to_egypt_dict_time(self.last_click_time),
             'last_ip': self.last_ip,
             'last_port': self.last_port,
             'created_at': to_egypt_dict_time(self.created_at)
@@ -195,9 +197,6 @@ class OpenEvent(db.Model):
     open_time = db.Column(db.DateTime, default=lambda: get_egypt_time().replace(tzinfo=None), nullable=False)
     ip_address = db.Column(db.String(100), nullable=True)
     port = db.Column(db.String(10), nullable=True)
-    latitude = db.Column(db.Float, nullable=True)  # Add this
-    longitude = db.Column(db.Float, nullable=True)  # Add this
-    location = db.Column(db.String(255), nullable=True)  # Add this
     user_agent = db.Column(db.Text, nullable=True)
 
     def to_dict(self):
@@ -207,9 +206,6 @@ class OpenEvent(db.Model):
             'open_time': to_egypt_dict_time(self.open_time),
             'ip_address': self.ip_address,
             'port': self.port,
-            'latitude': self.latitude,
-            'longitude': self.longitude,
-            'location': self.location,
             'user_agent': self.user_agent
         }
 
@@ -360,14 +356,6 @@ def track_click(tracking_id):
         from flask import redirect
         return redirect(redirect_url)
 
-
-
-    except Exception as e:
-        print(f"Click tracking error: {e}")
-        # Redirect to default URL even on error
-        redirect_url = request.args.get('redirect', 'https://www.google.com')
-        from flask import redirect
-        return redirect(redirect_url)
 
 @app.route('/api/smtp/test', methods=['POST'])
 def test_smtp_config():
@@ -613,58 +601,6 @@ def get_tracking_details(tracking_id):
 
 
 
-def get_location_from_ip(ip_address):
-    """Get location from IP address using a free API"""
-    if not ip_address or ip_address in ['127.0.0.1', 'localhost']:
-        return None, None, None
-
-    # Skip internal/private IP addresses
-    if (ip_address.startswith('192.168.') or
-        ip_address.startswith('10.') or
-        ip_address.startswith('172.16.') or
-        ip_address.startswith('172.17.') or
-        ip_address.startswith('172.18.') or
-        ip_address.startswith('172.19.') or
-        ip_address.startswith('172.2') or
-        ip_address.startswith('172.3')):
-        print(f"Skipping private IP: {ip_address}")
-        return None, None, None
-
-    try:
-        import requests
-        print(f"Getting location for IP: {ip_address}")
-
-        # Try ipapi.co first
-        response = requests.get(f'https://ipapi.co/{ip_address}/json/', timeout=10)
-
-        if response.status_code == 200:
-            data = response.json()
-            print(f"API response: {data}")
-
-            if 'latitude' in data and 'longitude' in data and data['latitude'] and data['longitude']:
-                latitude = float(data['latitude'])
-                longitude = float(data['longitude'])
-
-                # Build location string
-                location_parts = []
-                if data.get('city'):
-                    location_parts.append(data['city'])
-                if data.get('region'):
-                    location_parts.append(data['region'])
-                if data.get('country_name'):
-                    location_parts.append(data['country_name'])
-
-                location = ', '.join(location_parts) if location_parts else 'Unknown'
-
-                print(f"Location found: {latitude}, {longitude} - {location}")
-                return latitude, longitude, location
-        else:
-            print(f"API request failed with status: {response.status_code}")
-
-    except Exception as e:
-        print(f"Geolocation error for IP {ip_address}: {e}")
-
-    return None, None, None
 @app.route('/api/admin/clear-database', methods=['POST'])
 def clear_database():
     """Clear all tracking data from database"""
@@ -679,6 +615,7 @@ def clear_database():
         # Delete all data
         with db.engine.connect() as conn:
             # Delete in correct order to avoid foreign key constraints
+            conn.execute(text("DELETE FROM click_events"))  # ADD this line
             conn.execute(text("DELETE FROM open_events"))
             conn.execute(text("DELETE FROM email_tracking"))
             conn.commit()
@@ -694,7 +631,6 @@ def clear_database():
             'message': f'Failed to clear database: {str(e)}'
         }), 500
 
-
 # Initialize database
 def create_tables():
     with app.app_context():
@@ -703,9 +639,12 @@ def create_tables():
 
         # Add new columns if they don't exist
         try:
-            db.engine.execute('ALTER TABLE email_tracking ADD COLUMN click_count INTEGER DEFAULT 0')
-            db.engine.execute('ALTER TABLE email_tracking ADD COLUMN last_click_time DATETIME')
-        except:
+            with db.engine.connect() as conn:  # Use proper connection context
+                conn.execute(text('ALTER TABLE email_tracking ADD COLUMN click_count INTEGER DEFAULT 0'))
+                conn.execute(text('ALTER TABLE email_tracking ADD COLUMN last_click_time DATETIME'))
+                conn.commit()
+        except Exception as e:
+            print(f"Columns might already exist: {e}")
             pass  # Columns already exist
 
         print("Database tables created successfully!")

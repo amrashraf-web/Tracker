@@ -6,3 +6,5 @@ cryptography==41.0.4
 python-dotenv==1.0.0
 pytz==2023.3
 requests==2.31.0
+Werkzeug
+Pillow

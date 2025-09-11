@@ -86,22 +86,7 @@ function renderTrackingTable(data) {
         const openStatus = item.open_count > 0 ? 'opened' : 'not-opened';
         const statusClass = item.open_count > 0 ? 'bg-success' : 'bg-secondary';
 
-        // Format location with clickable coordinates
-        let locationHtml = '-';
-        if (item.last_latitude && item.last_longitude) {
-            const coords = `${item.last_latitude.toFixed(4)}, ${item.last_longitude.toFixed(4)}`;
-            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${item.last_latitude},${item.last_longitude}`;
-
-            locationHtml = `
-                <div class="location-cell">
-                    <a href="${mapsUrl}" target="_blank" class="location-link" title="View on Google Maps">
-                        <i class="fas fa-map-marker-alt text-danger me-1"></i>
-                        ${coords}
-                    </a>
-                    ${item.last_location ? `<br><small class="text-muted">${escapeHtml(item.last_location)}</small>` : ''}
-                </div>
-            `;
-        }
+        const clickStatusClass = item.click_count > 0 ? 'bg-primary' : 'bg-secondary';
 
         html += `
             <tr class="fade-in">
@@ -124,6 +109,11 @@ function renderTrackingTable(data) {
                     </span>
                 </td>
                 <td>
+                    <span class="badge ${clickStatusClass} status-badge">
+                        ${item.click_count || 0} ${(item.click_count || 0) === 1 ? 'click' : 'clicks'}
+                    </span>
+                </td>
+                <td>
                     <span class="${item.last_open_time ? 'text-success' : 'text-muted'}">
                         ${formatDate(item.last_open_time)}
                     </span>
@@ -139,9 +129,6 @@ function renderTrackingTable(data) {
                     </span>
                 </td>
                 <td>
-                    ${locationHtml}
-                </td>
-                <td>
                     <small class="text-muted">
                         ${formatDate(item.created_at)}
                     </small>
@@ -152,7 +139,6 @@ function renderTrackingTable(data) {
 
     tableBody.innerHTML = html;
 }
-
 // Clear database functions
 function confirmClearDatabase() {
     const modal = new bootstrap.Modal(document.getElementById('clearDatabaseModal'));
@@ -252,6 +238,8 @@ async function showTrackingDetails(trackingId, email) {
     }
 }
 
+
+
 function renderTrackingDetails(tracking, opens, email) {
     const content = document.getElementById('trackingDetailsContent');
 
@@ -262,91 +250,90 @@ function renderTrackingDetails(tracking, opens, email) {
                 <div class="col-md-6">
                     <strong>Email:</strong> ${escapeHtml(email)}<br>
                     <strong>Tracking ID:</strong> <span class="tracking-id">${tracking.tracking_id}</span><br>
-                    <strong>Total Opens:</strong> <span class="badge bg-success">${tracking.open_count}</span>
+                    <strong>Total Opens:</strong> <span class="badge bg-success">${tracking.open_count}</span><br>
+                    <strong>Total Clicks:</strong> <span class="badge bg-primary">${tracking.click_count || 0}</span>
                 </div>
                 <div class="col-md-6">
                     <strong>Created:</strong> ${formatDate(tracking.created_at)}<br>
                     <strong>Subject:</strong> ${tracking.subject ? escapeHtml(tracking.subject) : 'No subject'}<br>
-                    <strong>Last Open:</strong> ${formatDate(tracking.last_open_time)}
+                    <strong>Last Open:</strong> ${formatDate(tracking.last_open_time)}<br>
+                    <strong>Last Click:</strong> ${formatDate(tracking.last_click_time)}
                 </div>
             </div>
         </div>
     `;
 
-    if (opens.length === 0) {
+    // Show opens and clicks sections
+    if (opens.length === 0 && (!tracking.click_count || tracking.click_count === 0)) {
         html += `
             <div class="alert alert-info">
                 <i class="fas fa-info-circle me-2"></i>
-                This email has not been opened yet.
+                This email has not been opened or clicked yet.
             </div>
         `;
     } else {
-        html += `
-            <h6><i class="fas fa-history me-2"></i>Open History (${opens.length} events)</h6>
-            <div class="table-responsive">
-                <table class="table table-striped table-sm">
-                    <thead>
-                        <tr>
-                            <th>Open Time</th>
-                            <th>IP Address</th>
-                            <th>Port</th>
-                            <th>Location</th>
-                            <th>Time Ago</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
+        // Opens section
+        if (opens.length > 0) {
+            html += `
+                <h6><i class="fas fa-eye me-2"></i>Open History (${opens.length} events)</h6>
+                <div class="table-responsive mb-4">
+                    <table class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Open Time</th>
+                                <th>IP Address</th>
+                                <th>Port</th>
+                                <th>Time Ago</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
 
-        opens.forEach((open, index) => {
-            const timeAgo = getTimeAgo(open.open_time);
-            const isLatest = index === 0;
+            opens.forEach((open, index) => {
+                const timeAgo = getTimeAgo(open.open_time);
+                const isLatest = index === 0;
 
-            // Format location
-            let locationHtml = '-';
-            if (open.latitude && open.longitude) {
-                const coords = `${open.latitude.toFixed(4)}, ${open.longitude.toFixed(4)}`;
-                const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${open.latitude},${open.longitude}`;
-
-                locationHtml = `
-                    <a href="${mapsUrl}" target="_blank" class="location-link" title="View on Google Maps">
-                        <i class="fas fa-map-marker-alt text-danger me-1"></i>
-                        ${coords}
-                    </a>
-                    ${open.location ? `<br><small class="text-muted">${escapeHtml(open.location)}</small>` : ''}
+                html += `
+                    <tr class="${isLatest ? 'table-success' : ''}">
+                        <td>
+                            ${formatDate(open.open_time)}
+                            ${isLatest ? '<span class="badge bg-success ms-2">Latest</span>' : ''}
+                        </td>
+                        <td>
+                            <span class="font-monospace text-primary">${open.ip}</span>
+                        </td>
+                        <td>
+                            <span class="font-monospace text-info">${open.port}</span>
+                        </td>
+                        <td>
+                            <small class="text-muted">${timeAgo}</small>
+                        </td>
+                    </tr>
                 `;
-            }
+            });
 
             html += `
-                <tr class="${isLatest ? 'table-success' : ''}">
-                    <td>
-                        ${formatDate(open.open_time)}
-                        ${isLatest ? '<span class="badge bg-success ms-2">Latest</span>' : ''}
-                    </td>
-                    <td>
-                        <span class="font-monospace text-primary">${open.ip}</span>
-                    </td>
-                    <td>
-                        <span class="font-monospace text-info">${open.port}</span>
-                    </td>
-                    <td>
-                        ${locationHtml}
-                    </td>
-                    <td>
-                        <small class="text-muted">${timeAgo}</small>
-                    </td>
-                </tr>
+                        </tbody>
+                    </table>
+                </div>
             `;
-        });
+        }
 
+        // Clicks section (you'll need to modify the API call to include clicks)
+        // For now, just show a placeholder
         html += `
-                    </tbody>
-                </table>
+            <h6><i class="fas fa-mouse-pointer me-2"></i>Click History (${tracking.click_count || 0} events)</h6>
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                Click events will be shown here when available.
             </div>
         `;
     }
 
     content.innerHTML = html;
 }
+
+
 function getTimeAgo(dateString) {
     const now = new Date();
     const date = new Date(dateString);

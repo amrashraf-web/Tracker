@@ -13,7 +13,134 @@ function setupEventListeners() {
 
     // Email Form submission
     document.getElementById('emailForm').addEventListener('submit', handleEmailSubmit);
+
+    // Add image upload listener
+    document.getElementById('imageUpload').addEventListener('change', handleImageUpload);
 }
+
+async function handleImageUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file size
+    if (file.size > 5 * 1024 * 1024) {
+        showToast('File too large. Maximum size: 5MB', 'error');
+        e.target.value = '';
+        return;
+    }
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        const preview = document.getElementById('imagePreview');
+        const container = document.getElementById('imagePreviewContainer');
+
+        preview.src = e.target.result;
+        container.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+
+    // Upload to server
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+        const response = await fetch('/api/upload-image', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            uploadedImageUrl = data.url;
+            showToast('Image uploaded successfully!', 'success');
+        } else {
+            throw new Error(data.message);
+        }
+
+    } catch (error) {
+        showToast(`Upload failed: ${error.message}`, 'error');
+        e.target.value = '';
+        document.getElementById('imagePreviewContainer').style.display = 'none';
+        uploadedImageUrl = null;
+    }
+}
+
+
+async function handleEmailSubmit(e) {
+    e.preventDefault();
+
+    if (!smtpConfig) {
+        showToast('Please configure SMTP settings first', 'warning');
+        return;
+    }
+
+    if (!uploadedImageUrl) {
+        showToast('Please upload an image first', 'warning');
+        return;
+    }
+
+    const form = e.target;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sending...';
+    submitBtn.disabled = true;
+
+    try {
+        // Get form values - check if elements exist first
+        const subjectElement = document.getElementById('subject');
+        const redirectUrlElement = document.getElementById('redirectUrl');
+        const emailsElement = document.getElementById('emails');
+
+        if (!subjectElement || !redirectUrlElement || !emailsElement) {
+            throw new Error('Form elements not found. Please refresh the page.');
+        }
+
+        const subject = subjectElement.value.trim();
+        const redirectUrl = redirectUrlElement.value.trim() || 'https://www.google.com';
+        const emailsText = emailsElement.value.trim();
+
+        const emails = emailsText.split('\n')
+            .map(email => email.trim())
+            .filter(email => email && isValidEmail(email));
+
+        if (emails.length === 0) {
+            throw new Error('Please enter at least one valid email address');
+        }
+
+        const data = await apiRequest('/api/send-email', {
+            method: 'POST',
+            body: JSON.stringify({
+                subject: subject,
+                image_url: uploadedImageUrl,
+                redirect_url: redirectUrl,
+                emails: emails
+            })
+        });
+
+        if (data.success) {
+            showSendResults(data.results);
+
+            // Clear form on success
+            form.reset();
+            document.getElementById('imagePreviewContainer').style.display = 'none';
+            uploadedImageUrl = null;
+
+            showToast(`Successfully processed ${emails.length} emails!`, 'success');
+        } else {
+            throw new Error(data.message);
+        }
+
+    } catch (error) {
+        showToast(`Failed to send emails: ${error.message}`, 'error');
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+}
+
 
 // SMTP Configuration Functions
 async function loadSMTPConfig() {
@@ -128,65 +255,6 @@ async function sendTestEmail() {
     }
 }
 
-// Email Sending Functions
-async function handleEmailSubmit(e) {
-    e.preventDefault();
-
-    if (!smtpConfig) {
-        showToast('Please configure SMTP settings first', 'warning');
-        return;
-    }
-
-    const form = e.target;
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-
-    // Show loading
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sending...';
-    submitBtn.disabled = true;
-
-    try {
-        const subject = document.getElementById('subject').value.trim();
-        const body = document.getElementById('body').value.trim();
-        const emailsText = document.getElementById('emails').value.trim();
-
-        // Parse emails
-        const emails = emailsText.split('\n')
-            .map(email => email.trim())
-            .filter(email => email && isValidEmail(email));
-
-        if (emails.length === 0) {
-            throw new Error('Please enter at least one valid email address');
-        }
-
-        const data = await apiRequest('/api/send-email', {
-            method: 'POST',
-            body: JSON.stringify({
-                subject: subject,
-                body: body,
-                emails: emails
-            })
-        });
-
-        if (data.success) {
-            showSendResults(data.results);
-
-            // Clear form on success
-            document.getElementById('emailForm').reset();
-
-            showToast(`Successfully processed ${emails.length} emails!`, 'success');
-        } else {
-            throw new Error(data.message);
-        }
-
-    } catch (error) {
-        showToast(`Failed to send emails: ${error.message}`, 'error');
-    } finally {
-        // Reset button
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
-    }
-}
 
 function showSendResults(results) {
     const modalBody = document.getElementById('sendResults');
@@ -215,13 +283,24 @@ function showSendResults(results) {
 
         successful.forEach(result => {
             html += `
-                <div class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span>${result.email}</span>
-                        <small class="tracking-id">${result.tracking_id}</small>
+        <div class="list-group-item">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span>${result.email}</span>
+                <small class="tracking-id">${result.tracking_id}</small>
+            </div>
+            ${result.click_url ? `
+                <div class="mt-2">
+                    <label class="form-label small">Click Tracking URL:</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" value="${result.click_url}" readonly>
+                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('${result.click_url}')">
+                            <i class="fas fa-copy"></i>
+                        </button>
                     </div>
                 </div>
-            `;
+            ` : ''}
+        </div>
+    `;
         });
 
         html += '</div></div>';
@@ -258,4 +337,19 @@ function showSendResults(results) {
 function isValidEmail(email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Click tracking URL copied to clipboard!', 'success');
+    }).catch(() => {
+        // Fallback for older browsers
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showToast('Click tracking URL copied to clipboard!', 'success');
+    });
 }

@@ -60,18 +60,34 @@
                         <label for="subject" class="form-label">Subject</label>
                         <input type="text" class="form-control" id="subject" placeholder="Email Subject" required>
                     </div>
+
                     <div class="mb-3">
                         <label for="emails" class="form-label">Recipients</label>
                         <textarea class="form-control" id="emails" rows="3"
-                                  placeholder="email1@example.com&#10;email2@example.com&#10;email3@example.com" required></textarea>
+                            placeholder="email1@example.com&#10;email2@example.com&#10;email3@example.com" required></textarea>
                         <div class="form-text">Enter one email per line</div>
                     </div>
+
                     <div class="mb-3">
-                        <label for="body" class="form-label">Email Body</label>
-                        <textarea class="form-control" id="body" rows="6"
-                                  placeholder="Your email content here..." required></textarea>
-                        <div class="form-text">HTML content supported. Tracking pixel will be added automatically.</div>
+                        <label for="imageUpload" class="form-label">Email Image</label>
+                        <input type="file" class="form-control" id="imageUpload" accept="image/*" required>
+                        <div class="form-text">Upload PNG, JPG, JPEG, GIF, or WEBP (max 5MB)</div>
                     </div>
+
+                    <div class="mb-3" id="imagePreviewContainer" style="display: none;">
+                        <label class="form-label">Image Preview</label>
+                        <div class="border rounded p-2">
+                            <img id="imagePreview" src="" alt="Preview" style="max-width: 100%; height: auto; border-radius: 4px;">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="redirectUrl" class="form-label">Redirect URL (where users go when they click)</label>
+                        <input type="url" class="form-control" id="redirectUrl" placeholder="https://your-website.com"
+                            value="https://www.google.com">
+                        <div class="form-text">Users will be redirected here after click tracking</div>
+                    </div>
+
                     <button type="submit" class="btn btn-success w-100">
                         <i class="fas fa-paper-plane me-1"></i>Send Emails
                     </button>

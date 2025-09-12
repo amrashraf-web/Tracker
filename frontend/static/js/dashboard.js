@@ -94,7 +94,8 @@ async function handleEmailSubmit(e) {
         const redirectUrlElement = document.getElementById('redirectUrl');
         const emailsElement = document.getElementById('emails');
         const bodyElement = document.getElementById('body');
-        const bodyText = bodyElement ? bodyElement.value.trim() : '';
+        let bodyText = bodyElement ? bodyElement.value.trim() : '';
+        bodyText = bodyText.replace(/\n/g, "<br>");
         if (!subjectElement || !redirectUrlElement || !emailsElement) {
             throw new Error('Form elements not found. Please refresh the page.');
         }

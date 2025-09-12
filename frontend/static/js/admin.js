@@ -223,7 +223,7 @@ async function showTrackingDetails(trackingId, email) {
         const data = await apiRequest(`/api/tracking/${trackingId}/details`);
 
         if (data.success) {
-            renderTrackingDetails(data.tracking, data.opens, email);
+            renderTrackingDetails(data.tracking, data.opens,data.clicks, email);
         } else {
             throw new Error(data.message);
         }
@@ -239,8 +239,7 @@ async function showTrackingDetails(trackingId, email) {
 }
 
 
-
-function renderTrackingDetails(tracking, opens, email) {
+function renderTrackingDetails(tracking, opens, clicks, email) {
     const content = document.getElementById('trackingDetailsContent');
 
     let html = `
@@ -263,119 +262,88 @@ function renderTrackingDetails(tracking, opens, email) {
         </div>
     `;
 
-    // Show opens and clicks sections
-    if (opens.length === 0 && (!tracking.click_count || tracking.click_count === 0)) {
+    // Opens section
+    if (opens && opens.length > 0) {
         html += `
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle me-2"></i>
-                This email has not been opened or clicked yet.
+            <h6><i class="fas fa-eye me-2"></i>Open History (${opens.length} events)</h6>
+            <div class="table-responsive mb-4">
+                <table class="table table-striped table-sm">
+                    <thead>
+                        <tr>
+                            <th>Open Time</th>
+                            <th>IP Address</th>
+                            <th>Port</th>
+                            <th>Time Ago</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        opens.forEach((open, index) => {
+            const timeAgo = getTimeAgo(open.open_time);
+            const isLatest = index === 0;
+
+            html += `
+                <tr class="${isLatest ? 'table-success' : ''}">
+                    <td>${formatDate(open.open_time)} ${isLatest ? '<span class="badge bg-success ms-2">Latest</span>' : ''}</td>
+                    <td><span class="font-monospace text-primary">${open.ip}</span></td>
+                    <td><span class="font-monospace text-info">${open.port}</span></td>
+                    <td><small class="text-muted">${timeAgo}</small></td>
+                </tr>
+            `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    // Clicks section
+    if (clicks && clicks.length > 0) {
+        html += `
+            <h6><i class="fas fa-mouse-pointer me-2"></i>Click History (${clicks.length} events)</h6>
+            <div class="table-responsive mb-4">
+                <table class="table table-striped table-sm">
+                    <thead>
+                        <tr>
+                            <th>Click Time</th>
+                            <th>IP Address</th>
+                            <th>Port</th>
+                            <th>Time Ago</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        clicks.forEach((click, index) => {
+            const timeAgo = getTimeAgo(click.click_time);
+            const isLatest = index === 0;
+
+            html += `
+                <tr class="${isLatest ? 'table-primary' : ''}">
+                    <td>${formatDate(click.click_time)} ${isLatest ? '<span class="badge bg-primary ms-2">Latest</span>' : ''}</td>
+                    <td><span class="font-monospace text-primary">${click.ip}</span></td>
+                    <td><span class="font-monospace text-info">${click.port}</span></td>
+                    <td><small class="text-muted">${timeAgo}</small></td>
+                </tr>
+            `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
             </div>
         `;
     } else {
-        // Opens section
-        if (opens.length > 0) {
-            html += `
-                <h6><i class="fas fa-eye me-2"></i>Open History (${opens.length} events)</h6>
-                <div class="table-responsive mb-4">
-                    <table class="table table-striped table-sm">
-                        <thead>
-                            <tr>
-                                <th>Open Time</th>
-                                <th>IP Address</th>
-                                <th>Port</th>
-                                <th>Time Ago</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-
-            opens.forEach((open, index) => {
-                const timeAgo = getTimeAgo(open.open_time);
-                const isLatest = index === 0;
-
-                html += `
-                    <tr class="${isLatest ? 'table-success' : ''}">
-                        <td>
-                            ${formatDate(open.open_time)}
-                            ${isLatest ? '<span class="badge bg-success ms-2">Latest</span>' : ''}
-                        </td>
-                        <td>
-                            <span class="font-monospace text-primary">${open.ip}</span>
-                        </td>
-                        <td>
-                            <span class="font-monospace text-info">${open.port}</span>
-                        </td>
-                        <td>
-                            <small class="text-muted">${timeAgo}</small>
-                        </td>
-                    </tr>
-                `;
-            });
-
-            html += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-        }
-
-        // Clicks section (you'll need to modify the API call to include clicks)
-        // For now, just show a placeholder
-        // Clicks section
-        if (tracking.clicks && tracking.clicks.length > 0) {
-            html += `
-                <h6><i class="fas fa-mouse-pointer me-2"></i>Click History (${tracking.clicks.length} events)</h6>
-                <div class="table-responsive mb-4">
-                    <table class="table table-striped table-sm">
-                        <thead>
-                            <tr>
-                                <th>Click Time</th>
-                                <th>IP Address</th>
-                                <th>Port</th>
-                                <th>Time Ago</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-
-            tracking.clicks.forEach((click, index) => {
-                const timeAgo = getTimeAgo(click.click_time);
-                const isLatest = index === 0;
-
-                html += `
-                    <tr class="${isLatest ? 'table-primary' : ''}">
-                        <td>
-                            ${formatDate(click.click_time)}
-                            ${isLatest ? '<span class="badge bg-primary ms-2">Latest</span>' : ''}
-                        </td>
-                        <td>
-                            <span class="font-monospace text-primary">${click.ip}</span>
-                        </td>
-                        <td>
-                            <span class="font-monospace text-info">${click.port}</span>
-                        </td>
-                        <td>
-                            <small class="text-muted">${timeAgo}</small>
-                        </td>
-                    </tr>
-                `;
-            });
-
-            html += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-        } else {
-            html += `
-                <h6><i class="fas fa-mouse-pointer me-2"></i>Click History (0 events)</h6>
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
-                    No clicks yet for this email.
-                </div>
-            `;
-        }
-
+        html += `
+            <h6><i class="fas fa-mouse-pointer me-2"></i>Click History (0 events)</h6>
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                No clicks yet for this email.
+            </div>
+        `;
     }
 
     content.innerHTML = html;

@@ -231,12 +231,12 @@ def get_client_port():
 def generate_tracking_id():
     return uuid.uuid4().hex
 
-def create_email_body_with_image(image_url, tracking_id, redirect_url='https://www.google.com',body_text=""):
-    """Create email body with clickable image and tracking pixel"""
+def create_email_body_with_image(image_url, tracking_id, redirect_url='https://www.google.com', body_text=""):
+    """Create email body with normal design (text + optional small image + tracking pixel)"""
     base_url = request.url_root.rstrip('/')
 
     # Ensure image URL is absolute
-    if not image_url.startswith('http'):
+    if image_url and not image_url.startswith('http'):
         image_url = f"{base_url}/{image_url.lstrip('/')}"
 
     # Click tracking URL
@@ -245,8 +245,8 @@ def create_email_body_with_image(image_url, tracking_id, redirect_url='https://w
     # Tracking pixel URL
     pixel_url = f"{base_url}/track/{tracking_id}.gif"
 
-    # Create HTML email body with clickable image
-    html_body = f'''
+    # Build email body
+    html_body = f"""
     <!DOCTYPE html>
     <html>
     <head>
@@ -254,23 +254,31 @@ def create_email_body_with_image(image_url, tracking_id, redirect_url='https://w
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Email</title>
     </head>
-    <body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; background-color: #f4f4f4;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-            <a href="{click_tracking_url}" style="display: block; text-decoration: none;">
-                <p>{body_text}</p>
-                <img src="{image_url}"
-                     alt="Email Image"
-                     style="max-width:200px; height:auto;"
-                     onerror="this.style.display='none';">
-            </a>
+    <body style="margin:0; padding:20px; font-family: Arial, sans-serif; background-color:#f4f4f4;">
+        <div style="max-width:600px; margin:0 auto; background-color:white; 
+                    border-radius:8px; padding:20px; 
+                    box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+            
+            <!-- Email body text -->
+            <div style="font-size:15px; color:#333; line-height:1.6;">
+                {body_text}
+            </div>
+            
+            <!-- Optional image -->
+            {"<div style='margin-top:20px; text-align:center;'>"
+             f"<a href='{click_tracking_url}' target='_blank'>"
+             f"<img src='{image_url}' alt='Email Image' style='max-width:200px; height:auto; border-radius:6px;' onerror=\"this.style.display='none';\">"
+             "</a></div>" if image_url else ""}
         </div>
+
         <!-- Tracking pixel -->
-        <img src="{pixel_url}" width="1" height="1" style="display: none;" alt="">
+        <img src="{pixel_url}" width="1" height="1" style="display:none;" alt="">
     </body>
     </html>
-    '''
+    """
 
     return html_body, click_tracking_url
+
 
 @app.route('/')
 def dashboard():

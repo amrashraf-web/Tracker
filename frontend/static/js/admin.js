@@ -321,13 +321,61 @@ function renderTrackingDetails(tracking, opens, email) {
 
         // Clicks section (you'll need to modify the API call to include clicks)
         // For now, just show a placeholder
-        html += `
-            <h6><i class="fas fa-mouse-pointer me-2"></i>Click History (${tracking.click_count || 0} events)</h6>
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle me-2"></i>
-                Click events will be shown here when available.
-            </div>
-        `;
+        // Clicks section
+        if (tracking.clicks && tracking.clicks.length > 0) {
+            html += `
+                <h6><i class="fas fa-mouse-pointer me-2"></i>Click History (${tracking.clicks.length} events)</h6>
+                <div class="table-responsive mb-4">
+                    <table class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Click Time</th>
+                                <th>IP Address</th>
+                                <th>Port</th>
+                                <th>Time Ago</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            tracking.clicks.forEach((click, index) => {
+                const timeAgo = getTimeAgo(click.click_time);
+                const isLatest = index === 0;
+
+                html += `
+                    <tr class="${isLatest ? 'table-primary' : ''}">
+                        <td>
+                            ${formatDate(click.click_time)}
+                            ${isLatest ? '<span class="badge bg-primary ms-2">Latest</span>' : ''}
+                        </td>
+                        <td>
+                            <span class="font-monospace text-primary">${click.ip}</span>
+                        </td>
+                        <td>
+                            <span class="font-monospace text-info">${click.port}</span>
+                        </td>
+                        <td>
+                            <small class="text-muted">${timeAgo}</small>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else {
+            html += `
+                <h6><i class="fas fa-mouse-pointer me-2"></i>Click History (0 events)</h6>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    No clicks yet for this email.
+                </div>
+            `;
+        }
+
     }
 
     content.innerHTML = html;

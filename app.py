@@ -231,8 +231,9 @@ def get_client_port():
 def generate_tracking_id():
     return uuid.uuid4().hex
 
+
 def create_email_body_with_image(image_url, tracking_id, redirect_url='https://www.google.com', body_text=""):
-    """Create email body with normal design (text + optional small image + tracking pixel)"""
+    """Create clean email body like a normal Gmail body (no extra container)."""
     base_url = request.url_root.rstrip('/')
 
     # Ensure image URL is absolute
@@ -245,7 +246,7 @@ def create_email_body_with_image(image_url, tracking_id, redirect_url='https://w
     # Tracking pixel URL
     pixel_url = f"{base_url}/track/{tracking_id}.gif"
 
-    # Build email body
+    # Build simple email body (no containers, no background)
     html_body = f"""
     <!DOCTYPE html>
     <html>
@@ -254,22 +255,12 @@ def create_email_body_with_image(image_url, tracking_id, redirect_url='https://w
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Email</title>
     </head>
-    <body style="margin:0; padding:20px; font-family: Arial, sans-serif; background-color:#f4f4f4;">
-        <div style="max-width:600px; margin:0 auto; background-color:white; 
-                    border-radius:8px; padding:20px; 
-                    box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-            
-            <!-- Email body text -->
-            <div style="font-size:15px; color:#333; line-height:1.6;">
-                {body_text}
-            </div>
-            
-            <!-- Optional image -->
-            {"<div style='margin-top:20px; text-align:center;'>"
-             f"<a href='{click_tracking_url}' target='_blank'>"
-            f"<img src='{image_url}' alt='Email Image' style='max-width:200px; height:auto; border-radius:6px;'>"
-             "</a></div>" if image_url else ""}
-        </div>
+    <body style="margin:0; padding:0; font-family: Arial, sans-serif; line-height:1.6; color:#333;">
+        <!-- Email text -->
+        <p>{body_text}</p>
+
+        <!-- Optional image -->
+        {f"<p><a href='{click_tracking_url}' target='_blank'><img src='{image_url}' alt='Email Image' style='max-width:200px; height:auto;'></a></p>" if image_url else ""}
 
         <!-- Tracking pixel -->
         <img src="{pixel_url}" width="1" height="1" style="display:none;" alt="">

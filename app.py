@@ -267,7 +267,7 @@ def create_email_body_with_image(image_url, tracking_id, redirect_url='https://w
             <!-- Optional image -->
             {"<div style='margin-top:20px; text-align:center;'>"
              f"<a href='{click_tracking_url}' target='_blank'>"
-             f"<img src='{image_url}' alt='Email Image' style='max-width:200px; height:auto; border-radius:6px;' onerror=\"this.style.display='none';\">"
+            f"<img src='{image_url}' alt='Email Image' style='max-width:200px; height:auto; border-radius:6px;' onerror='this.style.display=\"none\";'>"
              "</a></div>" if image_url else ""}
         </div>
 

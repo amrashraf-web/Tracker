@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database connection
-DATABASE_URL = os.getenv('DATABASE_URL', 'mysql+pymysql://tracker:tracker@localhost:3306/simple_tracker')
+DATABASE_URL = os.getenv('DATABASE_URL', 'mysql+pymysql://root:UqxygMcqERznUoFOKtutbJQBZxuKNbru@mainline.proxy.rlwy.net:31375/railway')
 engine = create_engine(DATABASE_URL)
 
 def migrate_database():

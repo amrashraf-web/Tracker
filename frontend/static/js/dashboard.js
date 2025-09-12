@@ -93,7 +93,8 @@ async function handleEmailSubmit(e) {
         const subjectElement = document.getElementById('subject');
         const redirectUrlElement = document.getElementById('redirectUrl');
         const emailsElement = document.getElementById('emails');
-
+        const bodyElement = document.getElementById('body');
+        const bodyText = bodyElement ? bodyElement.value.trim() : '';
         if (!subjectElement || !redirectUrlElement || !emailsElement) {
             throw new Error('Form elements not found. Please refresh the page.');
         }
@@ -114,6 +115,7 @@ async function handleEmailSubmit(e) {
             method: 'POST',
             body: JSON.stringify({
                 subject: subject,
+                body: bodyText,
                 image_url: uploadedImageUrl,
                 redirect_url: redirectUrl,
                 emails: emails

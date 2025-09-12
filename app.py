@@ -231,7 +231,7 @@ def get_client_port():
 def generate_tracking_id():
     return uuid.uuid4().hex
 
-def create_email_body_with_image(image_url, tracking_id, redirect_url='https://www.google.com'):
+def create_email_body_with_image(image_url, tracking_id, redirect_url='https://www.google.com',body_text=""):
     """Create email body with clickable image and tracking pixel"""
     base_url = request.url_root.rstrip('/')
 
@@ -257,9 +257,10 @@ def create_email_body_with_image(image_url, tracking_id, redirect_url='https://w
     <body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; background-color: #f4f4f4;">
         <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
             <a href="{click_tracking_url}" style="display: block; text-decoration: none;">
+                <p>{body_text}</p>
                 <img src="{image_url}"
                      alt="Email Image"
-                     style="width: 100%; height: auto; display: block; cursor: pointer; border: none;"
+                     style="max-width:200px; height:auto;"
                      onerror="this.style.display='none';">
             </a>
         </div>
@@ -394,12 +395,12 @@ def test_smtp_config():
         return jsonify({'success': False, 'message': f'SMTP test failed: {str(e)}'}), 500
 
 
-
 @app.route('/api/send-email', methods=['POST'])
 def send_email():
     data = request.get_json()
 
     subject = data.get('subject', '')
+    body_text = data.get('body', '')
     image_url = data.get('image_url', '')  # Change from body to image_url
     redirect_url = data.get('redirect_url', 'https://www.google.com')  # Add redirect URL
     emails = data.get('emails', [])
@@ -435,7 +436,7 @@ def send_email():
                 db.session.add(tracking)
 
                 # Create email body with clickable image
-                email_body, click_url = create_email_body_with_image(image_url, tracking_id, redirect_url)
+                email_body, click_url = create_email_body_with_image(image_url, tracking_id, redirect_url,body_text)
 
                 # Send email
                 msg = MIMEMultipart()

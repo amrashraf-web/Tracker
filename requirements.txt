@@ -7,4 +7,5 @@ python-dotenv==1.0.0
 pytz==2023.3
 requests==2.31.0
 Werkzeug
+psycopg2-binary
 Pillow

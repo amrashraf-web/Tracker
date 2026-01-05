@@ -6,6 +6,7 @@ cryptography==41.0.4
 python-dotenv==1.0.0
 pytz==2023.3
 requests==2.31.0
-Werkzeug
+Werkzeug>=2.3,<4
 psycopg2-binary
 Pillow
+Flask-Login>=0.6.3

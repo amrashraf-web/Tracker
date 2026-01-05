@@ -23,7 +23,8 @@
                     </div>
                     <div class="mb-3">
                         <label for="username" class="form-label">Username</label>
-                        <input type="email" class="form-control" id="username" placeholder="your-email@gmail.com" required>
+                        <input type="email" class="form-control" id="username" placeholder="your-email@gmail.com"
+                            required>
                     </div>
                     <div class="mb-3">
                         <label for="password" class="form-label">Password</label>
@@ -64,12 +65,14 @@
                     <div class="mb-3">
                         <label for="emails" class="form-label">Recipients</label>
                         <textarea class="form-control" id="emails" rows="3"
-                            placeholder="email1@example.com&#10;email2@example.com&#10;email3@example.com" required></textarea>
+                            placeholder="email1@example.com&#10;email2@example.com&#10;email3@example.com"
+                            required></textarea>
                         <div class="form-text">Enter one email per line</div>
                     </div>
                     <div class="mb-3">
                         <label for="body" class="form-label">Email Body</label>
-                        <textarea class="form-control" id="body" rows="5" placeholder="Write your email message here..."></textarea>
+                        <textarea class="form-control" id="body" rows="5"
+                            placeholder="Write your email message here..."></textarea>
                     </div>
                     <div class="mb-3">
                         <label for="imageUpload" class="form-label">Email Image</label>
@@ -80,12 +83,14 @@
                     <div class="mb-3" id="imagePreviewContainer" style="display: none;">
                         <label class="form-label">Image Preview</label>
                         <div class="border rounded p-2">
-                            <img id="imagePreview" src="" alt="Preview" style="max-width: 100%; height: auto; border-radius: 4px;">
+                            <img id="imagePreview" src="" alt="Preview"
+                                style="max-width: 100%; height: auto; border-radius: 4px;">
                         </div>
                     </div>
 
                     <div class="mb-3">
-                        <label for="redirectUrl" class="form-label">Redirect URL (where users go when they click)</label>
+                        <label for="redirectUrl" class="form-label">Redirect URL (where users go when they
+                            click)</label>
                         <input type="url" class="form-control" id="redirectUrl" placeholder="https://your-website.com"
                             value="https://www.google.com">
                         <div class="form-text">Users will be redirected here after click tracking</div>
@@ -96,6 +101,76 @@
                     </button>
                 </form>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tracking Section -->
+<div class="mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="fas fa-chart-line me-2"></i>Your Email Tracking</h3>
+        <button class="btn btn-primary" onclick="refreshTracking()">
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" class="form-control" id="searchInput"
+                            placeholder="Search by email address...">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-outline-primary" onclick="searchTracking()">Search</button>
+                    <button class="btn btn-outline-secondary ms-2" onclick="clearSearch()">Clear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tracking Data Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Tracking Results</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Recipient Email</th>
+                            <th>Subject</th>
+                            <th>Opens</th>
+                            <th>Clicks</th>
+                            <th>Last Open Time</th>
+                            <th>Last IP</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trackingTableBody">
+                        <tr>
+                            <td colspan="8" class="text-center">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <nav aria-label="Tracking pagination">
+                <ul class="pagination justify-content-center" id="pagination">
+                    <!-- Pagination will be generated by JavaScript -->
+                </ul>
+            </nav>
         </div>
     </div>
 </div>
@@ -139,8 +214,440 @@
         </div>
     </div>
 </div>
+
+<!-- Tracking Details Modal -->
+<div class="modal fade" id="trackingDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-eye me-2"></i>Tracking Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="trackingDetailsContent">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<script>
+    // Check authentication
+    async function checkAuth() {
+        try {
+            const response = await fetch('/api/me');
+            if (!response.ok) {
+                window.location.href = '/login';
+                return;
+            }
+
+            // Load initial data
+            loadSMTPConfig();
+            loadTracking();
+        } catch (error) {
+            console.error('Auth error:', error);
+            window.location.href = '/login';
+        }
+    }
+
+    // Load SMTP config
+    async function loadSMTPConfig() {
+        try {
+            const response = await fetch('/api/smtp/config');
+            const data = await response.json();
+
+            if (data.success && data.config) {
+                document.getElementById('host').value = data.config.host;
+                document.getElementById('port').value = data.config.port;
+                document.getElementById('username').value = data.config.username;
+                document.getElementById('use_tls').checked = data.config.use_tls;
+            }
+        } catch (error) {
+            console.error('Error loading SMTP config:', error);
+        }
+    }
+
+    // Load tracking data
+    async function loadTracking(page = 1, search = '') {
+        try {
+            const url = new URL('/api/tracking', window.location.origin);
+            url.searchParams.append('page', page);
+            if (search) url.searchParams.append('search', search);
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success) {
+                displayTracking(data.data);
+                displayPagination(data.current_page, data.pages, search);
+            }
+        } catch (error) {
+            console.error('Error loading tracking:', error);
+            showToast('Error loading tracking data', 'danger');
+        }
+    }
+
+    // Display tracking data
+    function displayTracking(items) {
+        const tbody = document.getElementById('trackingTableBody');
+
+        if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No tracking data yet</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = items.map(item => `
+        <tr>
+            <td>${escapeHtml(item.recipient_email)}</td>
+            <td>${escapeHtml(item.subject || 'No subject')}</td>
+            <td><span class="badge bg-success">${item.open_count}</span></td>
+            <td><span class="badge bg-warning">${item.click_count}</span></td>
+            <td><small>${formatDate(item.last_open_time) || 'Never'}</small></td>
+            <td><small>${item.last_ip || 'N/A'}</small></td>
+            <td><small>${formatDate(item.created_at)}</small></td>
+            <td>
+                <button class="btn btn-sm btn-info" onclick="viewTrackingDetails('${item.tracking_id}')">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+    }
+
+    // Display pagination
+    function displayPagination(currentPage, totalPages, search = '') {
+        const pagination = document.getElementById('pagination');
+        pagination.innerHTML = '';
+
+        for (let i = 1; i <= totalPages; i++) {
+            const li = document.createElement('li');
+            li.className = 'page-item' + (i === currentPage ? ' active' : '');
+            li.innerHTML = `<button class="page-link" onclick="loadTracking(${i}, '${search}')">${i}</button>`;
+            pagination.appendChild(li);
+        }
+    }
+
+    // View tracking details
+    async function viewTrackingDetails(trackingId) {
+        try {
+            const response = await fetch('/api/tracking/' + trackingId + '/details');
+            const data = await response.json();
+
+            if (data.success) {
+                const tracking = data.tracking;
+                const opens = data.opens || [];
+                const clicks = data.clicks || [];
+
+                let html = `
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <p><strong>Recipient:</strong> ${escapeHtml(tracking.recipient_email)}</p>
+                        <p><strong>Subject:</strong> ${escapeHtml(tracking.subject || 'No subject')}</p>
+                        <p><strong>Tracking ID:</strong> <code>${tracking.tracking_id}</code></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Total Opens:</strong> ${tracking.open_count}</p>
+                        <p><strong>Total Clicks:</strong> ${tracking.click_count}</p>
+                        <p><strong>Sent:</strong> ${formatDate(tracking.created_at)}</p>
+                    </div>
+                </div>
+
+                <ul class="nav nav-tabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="opens-tab" data-bs-toggle="tab" data-bs-target="#opens" type="button" role="tab">
+                            Opens (${opens.length})
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="clicks-tab" data-bs-toggle="tab" data-bs-target="#clicks" type="button" role="tab">
+                            Clicks (${clicks.length})
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="opens" role="tabpanel">
+                        ${opens.length === 0 ? '<p class="mt-3">No opens yet</p>' : `
+                            <table class="table table-sm mt-3">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>IP</th>
+                                        <th>Port</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${opens.map(o => `
+                                        <tr>
+                                            <td>${formatDate(o.open_time)}</td>
+                                            <td><code>${o.ip}</code></td>
+                                            <td><code>${o.port}</code></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `}
+                    </div>
+                    <div class="tab-pane fade" id="clicks" role="tabpanel">
+                        ${clicks.length === 0 ? '<p class="mt-3">No clicks yet</p>' : `
+                            <table class="table table-sm mt-3">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>IP</th>
+                                        <th>Port</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${clicks.map(c => `
+                                        <tr>
+                                            <td>${formatDate(c.click_time)}</td>
+                                            <td><code>${c.ip}</code></td>
+                                            <td><code>${c.port}</code></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `}
+                    </div>
+                </div>
+            `;
+
+                document.getElementById('trackingDetailsContent').innerHTML = html;
+                new bootstrap.Modal(document.getElementById('trackingDetailsModal')).show();
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('Error loading details', 'danger');
+        }
+    }
+
+    // Search tracking
+    function searchTracking() {
+        const search = document.getElementById('searchInput').value;
+        loadTracking(1, search);
+    }
+
+    // Clear search
+    function clearSearch() {
+        document.getElementById('searchInput').value = '';
+        loadTracking(1, '');
+    }
+
+    // Refresh tracking
+    function refreshTracking() {
+        const search = document.getElementById('searchInput').value;
+        loadTracking(1, search);
+    }
+
+    // SMTP Form submission
+    document.getElementById('smtpForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const config = {
+            host: document.getElementById('host').value,
+            port: parseInt(document.getElementById('port').value),
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value,
+            use_tls: document.getElementById('use_tls').checked
+        };
+
+        try {
+            const response = await fetch('/api/smtp/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                showToast('SMTP config saved', 'success');
+            } else {
+                showToast(data.message || 'Error', 'danger');
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'danger');
+        }
+    });
+
+    // Clear SMTP config
+    function clearSMTPConfig() {
+        if (!confirm('Clear SMTP configuration?')) return;
+
+        document.getElementById('smtpForm').reset();
+        showToast('Form cleared', 'info');
+    }
+
+    // Test SMTP
+    function testSMTP() {
+        new bootstrap.Modal(document.getElementById('testModal')).show();
+    }
+
+    // Send test email
+    async function sendTestEmail() {
+        const testEmail = document.getElementById('testEmail').value;
+        if (!testEmail) {
+            showToast('Please enter test email', 'warning');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/smtp/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ test_email: testEmail })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                showToast('Test email sent', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('testModal')).hide();
+            } else {
+                showToast(data.message || 'Error', 'danger');
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'danger');
+        }
+    }
+
+    // Email form submission
+    document.getElementById('emailForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const imageFile = document.getElementById('imageUpload').files[0];
+        if (!imageFile) {
+            showToast('Please select an image', 'warning');
+            return;
+        }
+
+        // Upload image first
+        const formData = new FormData();
+        formData.append('image', imageFile);
+
+        try {
+            const uploadResponse = await fetch('/api/upload-image', {
+                method: 'POST',
+                body: formData
+            });
+
+            const uploadData = await uploadResponse.json();
+            if (!uploadData.success) {
+                showToast(uploadData.message || 'Upload failed', 'danger');
+                return;
+            }
+
+            // Send email with image
+            const emails = document.getElementById('emails').value
+                .split('\n')
+                .map(e => e.trim())
+                .filter(e => e);
+
+            const emailData = {
+                subject: document.getElementById('subject').value,
+                body: document.getElementById('body').value,
+                image_url: uploadData.url,
+                redirect_url: document.getElementById('redirectUrl').value,
+                emails: emails
+            };
+
+            const response = await fetch('/api/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(emailData)
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                const resultsHtml = `
+                <div class="alert alert-success">
+                    <strong>${data.message}</strong>
+                </div>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.results.map(r => `
+                            <tr class="${r.success ? 'table-success' : 'table-danger'}">
+                                <td>${escapeHtml(r.email)}</td>
+                                <td>${r.success ? 'Sent' : 'Failed: ' + r.error}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+                document.getElementById('sendResults').innerHTML = resultsHtml;
+                new bootstrap.Modal(document.getElementById('resultsModal')).show();
+
+                // Reset form and refresh tracking
+                document.getElementById('emailForm').reset();
+                document.getElementById('imagePreviewContainer').style.display = 'none';
+                refreshTracking();
+            } else {
+                showToast(data.message || 'Error sending emails', 'danger');
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'danger');
+        }
+    });
+
+    // Image preview
+    document.getElementById('imageUpload').addEventListener('change', function (e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                document.getElementById('imagePreview').src = event.target.result;
+                document.getElementById('imagePreviewContainer').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Helper functions
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        return date.toLocaleString();
+    }
+
+    function showToast(message, type = 'info') {
+        const toast = document.getElementById('toast');
+        const body = document.getElementById('toast-body');
+
+        toast.className = 'toast show';
+        body.textContent = message;
+        body.className = `toast-body bg-${type} text-white`;
+
+        setTimeout(() => {
+            toast.className = 'toast';
+        }, 3000);
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', checkAuth);
+</script>
 <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}

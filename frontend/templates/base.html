@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
 </head>
+
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
@@ -15,9 +17,20 @@
                 <i class="fas fa-envelope-open-text me-2"></i>
                 Simple Email Tracker
             </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="/">Dashboard</a>
-                <a class="nav-link" href="/admin">Admin</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <div class="navbar-nav ms-auto">
+                    <span class="nav-link" id="user-display" style="display: none;"></span>
+                    <a class="nav-link" href="/dashboard" id="dashboard-link" style="display: none;">Dashboard</a>
+                    <a class="nav-link" href="/admin" id="admin-link" style="display: none;">Admin</a>
+                    <button class="btn btn-outline-light btn-sm ms-2" id="logout-btn" onclick="logout()"
+                        style="display: none;">
+                        <i class="fas fa-sign-out-alt me-1"></i>Logout
+                    </button>
+                    <a class="nav-link" href="/login" id="login-link">Login</a>
+                </div>
             </div>
         </div>
     </nav>
@@ -38,7 +51,65 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Check authentication on page load
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/me');
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const user = data.user;
+
+                    // Show authenticated UI
+                    document.getElementById('user-display').textContent = `Welcome, ${user.username}`;
+                    document.getElementById('user-display').style.display = 'inline';
+                    document.getElementById('dashboard-link').style.display = 'inline';
+                    document.getElementById('logout-btn').style.display = 'inline-block';
+                    document.getElementById('login-link').style.display = 'none';
+
+                    // Show admin link if user is admin
+                    if (user.is_admin) {
+                        document.getElementById('admin-link').style.display = 'inline';
+                    }
+
+                    return user;
+                } else {
+                    // Show login UI
+                    document.getElementById('user-display').style.display = 'none';
+                    document.getElementById('dashboard-link').style.display = 'none';
+                    document.getElementById('logout-btn').style.display = 'none';
+                    document.getElementById('admin-link').style.display = 'none';
+                    document.getElementById('login-link').style.display = 'inline';
+                    return null;
+                }
+            } catch (error) {
+                console.error('Auth check error:', error);
+                return null;
+            }
+        }
+
+        // Logout function
+        async function logout() {
+            try {
+                const response = await fetch('/logout', {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                alert('Logout failed');
+            }
+        }
+
+        // Check auth on page load
+        document.addEventListener('DOMContentLoaded', checkAuth);
+    </script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
+
 </html>

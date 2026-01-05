@@ -1,7 +1,9 @@
-from flask import Flask, render_template, request, jsonify, make_response,send_from_directory
+from flask import Flask, render_template, request, jsonify, make_response, send_from_directory, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from sqlalchemy import create_engine, text
 from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
 import datetime
 import uuid
 import base64
@@ -10,118 +12,73 @@ import re
 from dotenv import load_dotenv
 import pytz
 from werkzeug.utils import secure_filename
-import os
 from PIL import Image
+
 load_dotenv()
 
 app = Flask(__name__, template_folder='frontend/templates', static_folder='frontend/static')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 # Image upload configuration
 UPLOAD_FOLDER = 'frontend/static/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# Create upload directory if it doesn't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
 CORS(app)
 
 EGYPT_TZ = pytz.timezone('Africa/Cairo')
 UTC_TZ = pytz.UTC
 
-@app.route('/static/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/api/upload-image', methods=['POST'])
-def upload_image():
-    try:
-        if 'image' not in request.files:
-            return jsonify({'success': False, 'message': 'No image file provided'}), 400
+# ============ MODELS ============
 
-        file = request.files['image']
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
-        if file.filename == '':
-            return jsonify({'success': False, 'message': 'No file selected'}), 400
+    # Relationships
+    smtp_configs = db.relationship('SMTPConfig', backref='user', lazy=True, cascade='all, delete-orphan')
+    email_tracking = db.relationship('EmailTracking', backref='user', lazy=True, cascade='all, delete-orphan')
 
-        if not allowed_file(file.filename):
-            return jsonify({'success': False, 'message': 'Invalid file type. Allowed: PNG, JPG, JPEG, GIF, WEBP'}), 400
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
 
-        # Check file size
-        file.seek(0, os.SEEK_END)
-        file_length = file.tell()
-        if file_length > MAX_FILE_SIZE:
-            return jsonify({'success': False, 'message': 'File too large. Maximum size: 5MB'}), 400
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
 
-        file.seek(0)
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'is_admin': self.is_admin,
+            'created_at': to_egypt_dict_time(self.created_at)
+        }
 
-        # Generate unique filename
-        filename = str(uuid.uuid4()) + '.' + file.filename.rsplit('.', 1)[1].lower()
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
-        # Save file
-        file.save(file_path)
-
-        # Get image dimensions
-        try:
-            with Image.open(file_path) as img:
-                width, height = img.size
-        except Exception:
-            width, height = None, None
-
-        # Return file info
-        base_url = request.url_root.rstrip('/')
-        image_url = f"{base_url}/static/uploads/{filename}"
-
-        return jsonify({
-            'success': True,
-            'filename': filename,
-            'url': image_url,
-            'width': width,
-            'height': height
-        })
-
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'Upload failed: {str(e)}'}), 500
-
-
-def get_egypt_time():
-    """Get current time in Egypt timezone"""
-    return datetime.datetime.now(EGYPT_TZ)
-
-def convert_to_egypt_time(utc_time):
-    """Convert UTC time to Egypt time"""
-    if utc_time is None:
-        return None
-    if utc_time.tzinfo is None:
-        utc_time = UTC_TZ.localize(utc_time)
-    return utc_time.astimezone(EGYPT_TZ)
-
-def to_egypt_dict_time(dt):
-    """Convert datetime to Egypt timezone for API responses"""
-    if dt is None:
-        return None
-
-    # If dt is naive (no timezone), assume it's already in Egypt time
-    if dt.tzinfo is None:
-        egypt_dt = EGYPT_TZ.localize(dt)
-    else:
-        egypt_dt = dt.astimezone(EGYPT_TZ)
-
-    # Return ISO format that JavaScript can parse correctly
-    return egypt_dt.strftime('%Y-%m-%dT%H:%M:%S%z')
-# Models
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 class SMTPConfig(db.Model):
     __tablename__ = 'smtp_configs'
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     host = db.Column(db.String(255), nullable=False)
     port = db.Column(db.Integer, nullable=False, default=587)
     username = db.Column(db.String(255), nullable=False)
@@ -135,7 +92,7 @@ class SMTPConfig(db.Model):
             'host': self.host,
             'port': self.port,
             'username': self.username,
-            'password': '********',  # Hide password in responses
+            'password': '********',  # Hide password
             'use_tls': self.use_tls,
             'created_at': to_egypt_dict_time(self.created_at)
         }
@@ -143,6 +100,7 @@ class SMTPConfig(db.Model):
 class EmailTracking(db.Model):
     __tablename__ = 'email_tracking'
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     tracking_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
     recipient_email = db.Column(db.String(255), nullable=False, index=True)
     subject = db.Column(db.Text, nullable=True)
@@ -153,6 +111,10 @@ class EmailTracking(db.Model):
     last_ip = db.Column(db.String(100), nullable=True)
     last_port = db.Column(db.String(10), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: get_egypt_time().replace(tzinfo=None))
+
+    # Relationships
+    open_events = db.relationship('OpenEvent', backref='tracking', lazy=True, cascade='all, delete-orphan')
+    click_events = db.relationship('ClickEvent', backref='tracking', lazy=True, cascade='all, delete-orphan')
 
     def to_dict(self):
         return {
@@ -168,7 +130,6 @@ class EmailTracking(db.Model):
             'last_port': self.last_port,
             'created_at': to_egypt_dict_time(self.created_at)
         }
-
 
 class ClickEvent(db.Model):
     __tablename__ = 'click_events'
@@ -189,7 +150,6 @@ class ClickEvent(db.Model):
             'user_agent': self.user_agent
         }
 
-
 class OpenEvent(db.Model):
     __tablename__ = 'open_events'
     id = db.Column(db.Integer, primary_key=True)
@@ -209,7 +169,27 @@ class OpenEvent(db.Model):
             'user_agent': self.user_agent
         }
 
-# Utility Functions
+# ============ UTILITY FUNCTIONS ============
+
+def get_egypt_time():
+    return datetime.datetime.now(EGYPT_TZ)
+
+def convert_to_egypt_time(utc_time):
+    if utc_time is None:
+        return None
+    if utc_time.tzinfo is None:
+        utc_time = UTC_TZ.localize(utc_time)
+    return utc_time.astimezone(EGYPT_TZ)
+
+def to_egypt_dict_time(dt):
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        egypt_dt = EGYPT_TZ.localize(dt)
+    else:
+        egypt_dt = dt.astimezone(EGYPT_TZ)
+    return egypt_dt.strftime('%Y-%m-%dT%H:%M:%S%z')
+
 def get_client_ip():
     x_forwarded_for = request.headers.get('X-Forwarded-For', '')
     if x_forwarded_for:
@@ -231,22 +211,14 @@ def get_client_port():
 def generate_tracking_id():
     return uuid.uuid4().hex
 
-
 def create_email_body_with_image(image_url, tracking_id, redirect_url='https://www.google.com', body_text=""):
-    """Create clean email body like a normal Gmail body (no extra container)."""
     base_url = request.url_root.rstrip('/')
-
-    # Ensure image URL is absolute
     if image_url and not image_url.startswith('http'):
         image_url = f"{base_url}/{image_url.lstrip('/')}"
 
-    # Click tracking URL
     click_tracking_url = f"{base_url}/click/{tracking_id}?redirect={redirect_url}"
-
-    # Tracking pixel URL
     pixel_url = f"{base_url}/track/{tracking_id}.gif"
 
-    # Build simple email body (no containers, no background)
     html_body = f"""
     <!DOCTYPE html>
     <html>
@@ -256,13 +228,8 @@ def create_email_body_with_image(image_url, tracking_id, redirect_url='https://w
         <title>Email</title>
     </head>
     <body style="margin:0; padding:0; font-family: Arial, sans-serif; line-height:1.6; color:#333;">
-        <!-- Email text -->
         <p style="margin:0 0 12px 0;">{body_text}</p>
-
-        <!-- Optional image -->
         {f"<p><a href='{click_tracking_url}' target='_blank'><img src='{image_url}' alt='Email Image' style='max-width:200px; max-height:200px; height:auto; width:auto;'></a></p>" if image_url else ""}
-
-        <!-- Tracking pixel -->
         <img src="{pixel_url}" width="1" height="1" style="display:none;" alt="">
     </body>
     </html>
@@ -270,37 +237,137 @@ def create_email_body_with_image(image_url, tracking_id, redirect_url='https://w
 
     return html_body, click_tracking_url
 
+# ============ AUTHENTICATION ROUTES ============
 
-@app.route('/')
-def dashboard():
-    return render_template('dashboard.html')
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
 
-@app.route('/admin')
-def admin():
-    return render_template('admin.html')
+        if not username or not password:
+            return jsonify({'success': False, 'message': 'Username and password required'}), 400
 
-# API Routes
+        user = User.query.filter_by(username=username).first()
+
+        if user and user.check_password(password):
+            login_user(user)
+            return jsonify({'success': True, 'message': 'Login successful', 'user': user.to_dict()})
+        else:
+            return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
+
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        data = request.get_json()
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+
+        if not all([username, email, password]):
+            return jsonify({'success': False, 'message': 'All fields required'}), 400
+
+        if User.query.filter_by(username=username).first():
+            return jsonify({'success': False, 'message': 'Username already exists'}), 400
+
+        if User.query.filter_by(email=email).first():
+            return jsonify({'success': False, 'message': 'Email already exists'}), 400
+
+        user = User(username=username, email=email)
+        user.set_password(password)
+
+        db.session.add(user)
+        db.session.commit()
+
+        login_user(user)
+        return jsonify({'success': True, 'message': 'Registration successful', 'user': user.to_dict()})
+
+    return render_template('register.html')
+
+@app.route('/logout', methods=['POST'])
+@login_required
+def logout():
+    logout_user()
+    return jsonify({'success': True, 'message': 'Logged out successfully'})
+
+@app.route('/api/me')
+@login_required
+def get_current_user():
+    return jsonify({'success': True, 'user': current_user.to_dict()})
+
+# ============ USER MANAGEMENT (ADMIN ONLY) ============
+
+@app.route('/api/admin/users', methods=['GET'])
+@login_required
+def get_all_users():
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Admin access required'}), 403
+
+    users = User.query.all()
+    return jsonify({'success': True, 'users': [u.to_dict() for u in users]})
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@login_required
+def delete_user(user_id):
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Admin access required'}), 403
+
+    if user_id == current_user.id:
+        return jsonify({'success': False, 'message': 'Cannot delete yourself'}), 400
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+
+    db.session.delete(user)
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': 'User deleted successfully'})
+
+@app.route('/api/admin/users/<int:user_id>/toggle-admin', methods=['POST'])
+@login_required
+def toggle_admin(user_id):
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Admin access required'}), 403
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+
+    user.is_admin = not user.is_admin
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': 'Admin status updated', 'user': user.to_dict()})
+
+# ============ SMTP CONFIG ROUTES ============
+
 @app.route('/api/smtp/config', methods=['GET'])
+@login_required
 def get_smtp_config():
-    config = SMTPConfig.query.first()
+    config = SMTPConfig.query.filter_by(user_id=current_user.id).first()
+
     if config:
         return jsonify({'success': True, 'config': config.to_dict()})
     return jsonify({'success': False, 'message': 'No SMTP configuration found'})
 
 @app.route('/api/smtp/config', methods=['POST'])
+@login_required
 def save_smtp_config():
     data = request.get_json()
 
-    # Validate required fields
     required_fields = ['host', 'port', 'username', 'password']
     for field in required_fields:
         if not data.get(field):
             return jsonify({'success': False, 'message': f'{field} is required'}), 400
 
-    # Delete existing config and create new one (simple approach)
-    SMTPConfig.query.delete()
+    # Delete existing config for this user
+    SMTPConfig.query.filter_by(user_id=current_user.id).delete()
 
     config = SMTPConfig(
+        user_id=current_user.id,
         host=data['host'],
         port=int(data['port']),
         username=data['username'],
@@ -313,51 +380,8 @@ def save_smtp_config():
 
     return jsonify({'success': True, 'message': 'SMTP configuration saved successfully'})
 
-
-@app.route('/click/<tracking_id>')
-def track_click(tracking_id):
-    try:
-        # Find tracking record
-        tracking = EmailTracking.query.filter_by(tracking_id=tracking_id).first()
-
-        if tracking:
-            client_ip = get_client_ip()
-            client_port = get_client_port()
-
-            # Create click event record
-            click_event = ClickEvent(
-                tracking_id=tracking_id,
-                click_time=get_egypt_time().replace(tzinfo=None),
-                ip_address=client_ip,
-                port=client_port,
-                user_agent=request.headers.get('User-Agent', '')[:500]
-            )
-            db.session.add(click_event)
-
-            # Update tracking summary for clicks
-            tracking.click_count = (tracking.click_count or 0) + 1
-            tracking.last_click_time = get_egypt_time().replace(tzinfo=None)
-            tracking.last_ip = client_ip
-            tracking.last_port = client_port
-
-            db.session.commit()
-
-        # Get redirect URL from query params or use default
-        redirect_url = request.args.get('redirect', 'https://www.google.com')
-
-        # Redirect to the intended destination
-        from flask import redirect
-        return redirect(redirect_url)
-
-    except Exception as e:
-        print(f"Click tracking error: {e}")
-        # Redirect to default URL even on error
-        redirect_url = request.args.get('redirect', 'https://www.google.com')
-        from flask import redirect
-        return redirect(redirect_url)
-
-
 @app.route('/api/smtp/test', methods=['POST'])
+@login_required
 def test_smtp_config():
     data = request.get_json()
     test_email = data.get('test_email')
@@ -365,7 +389,7 @@ def test_smtp_config():
     if not test_email:
         return jsonify({'success': False, 'message': 'Test email is required'}), 400
 
-    config = SMTPConfig.query.first()
+    config = SMTPConfig.query.filter_by(user_id=current_user.id).first()
     if not config:
         return jsonify({'success': False, 'message': 'No SMTP configuration found'}), 400
 
@@ -393,15 +417,17 @@ def test_smtp_config():
     except Exception as e:
         return jsonify({'success': False, 'message': f'SMTP test failed: {str(e)}'}), 500
 
+# ============ EMAIL SENDING ROUTES ============
 
 @app.route('/api/send-email', methods=['POST'])
+@login_required
 def send_email():
     data = request.get_json()
 
     subject = data.get('subject', '')
     body_text = data.get('body', '')
-    image_url = data.get('image_url', '')  # Change from body to image_url
-    redirect_url = data.get('redirect_url', 'https://www.google.com')  # Add redirect URL
+    image_url = data.get('image_url', '')
+    redirect_url = data.get('redirect_url', 'https://www.google.com')
     emails = data.get('emails', [])
 
     if not emails:
@@ -410,7 +436,7 @@ def send_email():
     if not image_url:
         return jsonify({'success': False, 'message': 'No image provided'}), 400
 
-    config = SMTPConfig.query.first()
+    config = SMTPConfig.query.filter_by(user_id=current_user.id).first()
     if not config:
         return jsonify({'success': False, 'message': 'No SMTP configuration found'}), 400
 
@@ -423,21 +449,18 @@ def send_email():
 
         for email in emails:
             try:
-                # Generate unique tracking ID for each email
                 tracking_id = generate_tracking_id()
 
-                # Create tracking record
                 tracking = EmailTracking(
+                    user_id=current_user.id,
                     tracking_id=tracking_id,
                     recipient_email=email,
                     subject=subject
                 )
                 db.session.add(tracking)
 
-                # Create email body with clickable image
-                email_body, click_url = create_email_body_with_image(image_url, tracking_id, redirect_url,body_text)
+                email_body, click_url = create_email_body_with_image(image_url, tracking_id, redirect_url, body_text)
 
-                # Send email
                 msg = MIMEMultipart()
                 msg['From'] = config.username
                 msg['To'] = email
@@ -478,14 +501,20 @@ def send_email():
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Failed to send emails: {str(e)}'}), 500
 
+# ============ TRACKING ROUTES ============
 
 @app.route('/api/tracking', methods=['GET'])
+@login_required
 def get_tracking_data():
     page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '')
     per_page = 50
 
     query = EmailTracking.query
+
+    # If not admin, only show own emails
+    if not current_user.is_admin:
+        query = query.filter_by(user_id=current_user.id)
 
     if search:
         query = query.filter(EmailTracking.recipient_email.contains(search))
@@ -503,19 +532,74 @@ def get_tracking_data():
         'per_page': per_page
     })
 
+@app.route('/api/tracking/<tracking_id>/details', methods=['GET'])
+@login_required
+def get_tracking_details(tracking_id):
+    tracking = EmailTracking.query.filter_by(tracking_id=tracking_id).first()
+    if not tracking:
+        return jsonify({'success': False, 'message': 'Tracking record not found'}), 404
 
+    # Check access
+    if not current_user.is_admin and tracking.user_id != current_user.id:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
 
-@app.route('/track/<tracking_id>.gif')
-def track_pixel(tracking_id):
+    open_events = OpenEvent.query.filter_by(tracking_id=tracking_id).order_by(OpenEvent.open_time.desc()).all()
+    click_events = ClickEvent.query.filter_by(tracking_id=tracking_id).order_by(ClickEvent.click_time.desc()).all()
+
+    opens = [{'open_time': to_egypt_dict_time(e.open_time), 'ip': e.ip_address or 'Unknown', 'port': e.port or 'Unknown'} for e in open_events]
+    clicks = [{'click_time': to_egypt_dict_time(e.click_time), 'ip': e.ip_address or 'Unknown', 'port': e.port or 'Unknown'} for e in click_events]
+
+    return jsonify({
+        'success': True,
+        'tracking': tracking.to_dict(),
+        'opens': opens,
+        'clicks': clicks
+    })
+
+# ============ PUBLIC TRACKING (No auth needed) ============
+
+@app.route('/click/<tracking_id>')
+def track_click(tracking_id):
     try:
-        # Find tracking record
         tracking = EmailTracking.query.filter_by(tracking_id=tracking_id).first()
 
         if tracking:
             client_ip = get_client_ip()
             client_port = get_client_port()
 
-            # Create open event record (keep existing OpenEvent for opens)
+            click_event = ClickEvent(
+                tracking_id=tracking_id,
+                click_time=get_egypt_time().replace(tzinfo=None),
+                ip_address=client_ip,
+                port=client_port,
+                user_agent=request.headers.get('User-Agent', '')[:500]
+            )
+            db.session.add(click_event)
+
+            tracking.click_count = (tracking.click_count or 0) + 1
+            tracking.last_click_time = get_egypt_time().replace(tzinfo=None)
+            tracking.last_ip = client_ip
+            tracking.last_port = client_port
+
+            db.session.commit()
+
+        redirect_url = request.args.get('redirect', 'https://www.google.com')
+        return redirect(redirect_url)
+
+    except Exception as e:
+        print(f"Click tracking error: {e}")
+        redirect_url = request.args.get('redirect', 'https://www.google.com')
+        return redirect(redirect_url)
+
+@app.route('/track/<tracking_id>.gif')
+def track_pixel(tracking_id):
+    try:
+        tracking = EmailTracking.query.filter_by(tracking_id=tracking_id).first()
+
+        if tracking:
+            client_ip = get_client_ip()
+            client_port = get_client_port()
+
             open_event = OpenEvent(
                 tracking_id=tracking_id,
                 open_time=get_egypt_time().replace(tzinfo=None),
@@ -525,14 +609,11 @@ def track_pixel(tracking_id):
             )
             db.session.add(open_event)
 
-            # Update tracking summary for opens only
             tracking.open_count = (tracking.open_count or 0) + 1
             tracking.last_open_time = get_egypt_time().replace(tzinfo=None)
-            # Don't update last_ip and last_port here since this is just an open, not a click
 
             db.session.commit()
 
-        # Return 1x1 transparent GIF
         gif_data = base64.b64decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7')
         response = make_response(gif_data)
         response.headers.update({
@@ -546,76 +627,99 @@ def track_pixel(tracking_id):
 
     except Exception as e:
         print(f"Tracking error: {e}")
-        # Still return GIF even on error
         gif_data = base64.b64decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7')
         response = make_response(gif_data)
         response.headers['Content-Type'] = 'image/gif'
         return response
 
+# ============ IMAGE UPLOAD ROUTES ============
 
+@app.route('/static/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-@app.route('/api/tracking/<tracking_id>/details', methods=['GET'])
-def get_tracking_details(tracking_id):
-    """Get detailed tracking information for a specific tracking ID"""
+@app.route('/api/upload-image', methods=['POST'])
+@login_required
+def upload_image():
     try:
-        # Get the main tracking record
-        tracking = EmailTracking.query.filter_by(tracking_id=tracking_id).first()
-        if not tracking:
-            return jsonify({'success': False, 'message': 'Tracking record not found'}), 404
+        if 'image' not in request.files:
+            return jsonify({'success': False, 'message': 'No image file provided'}), 400
 
-        # Get open events
-        open_events = OpenEvent.query.filter_by(tracking_id=tracking_id)\
-                                   .order_by(OpenEvent.open_time.desc())\
-                                   .all()
+        file = request.files['image']
 
-        # Get click events
-        click_events = ClickEvent.query.filter_by(tracking_id=tracking_id)\
-                                     .order_by(ClickEvent.click_time.desc())\
-                                     .all()
+        if file.filename == '':
+            return jsonify({'success': False, 'message': 'No file selected'}), 400
 
-        opens = []
-        for event in open_events:
-            opens.append({
-                'open_time': to_egypt_dict_time(event.open_time),
-                'ip': event.ip_address or 'Unknown',
-                'port': event.port or 'Unknown'
-            })
+        if not allowed_file(file.filename):
+            return jsonify({'success': False, 'message': 'Invalid file type. Allowed: PNG, JPG, JPEG, GIF, WEBP'}), 400
 
-        clicks = []
-        for event in click_events:
-            clicks.append({
-                'click_time': to_egypt_dict_time(event.click_time),
-                'ip': event.ip_address or 'Unknown',
-                'port': event.port or 'Unknown'
-            })
+        file.seek(0, os.SEEK_END)
+        file_length = file.tell()
+        if file_length > MAX_FILE_SIZE:
+            return jsonify({'success': False, 'message': 'File too large. Maximum size: 5MB'}), 400
+
+        file.seek(0)
+
+        filename = str(uuid.uuid4()) + '.' + file.filename.rsplit('.', 1)[1].lower()
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        file.save(file_path)
+
+        try:
+            with Image.open(file_path) as img:
+                width, height = img.size
+        except Exception:
+            width, height = None, None
+
+        base_url = request.url_root.rstrip('/')
+        image_url = f"{base_url}/static/uploads/{filename}"
 
         return jsonify({
             'success': True,
-            'tracking': tracking.to_dict(),
-            'opens': opens,
-            'clicks': clicks
+            'filename': filename,
+            'url': image_url,
+            'width': width,
+            'height': height
         })
 
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, 'message': f'Upload failed: {str(e)}'}), 500
 
+# ============ ADMIN ROUTES ============
 
+@app.route('/')
+def index():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    return render_template('dashboard.html')
+
+@app.route('/admin')
+@login_required
+def admin():
+    if not current_user.is_admin:
+        return redirect(url_for('dashboard'))
+    return render_template('admin.html')
 
 @app.route('/api/admin/clear-database', methods=['POST'])
+@login_required
 def clear_database():
-    """Clear all tracking data from database"""
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Admin access required'}), 403
+
+    data = request.get_json(silent=True) or {}
+    confirmation = data.get('confirmation', '').strip()
+
+    if confirmation != 'DELETE ALL':
+        return jsonify({'success': False, 'message': 'Invalid confirmation'}), 400
+
     try:
-        # Verify admin access by requiring a confirmation
-        data = request.get_json(silent=True) or {}
-        confirmation = data.get('confirmation', '').strip()
-
-        if confirmation != 'DELETE ALL':
-            return jsonify({'success': False, 'message': 'Invalid confirmation'}), 400
-
-        # Delete all data
         with db.engine.connect() as conn:
-            # Delete in correct order to avoid foreign key constraints
-            conn.execute(text("DELETE FROM click_events"))  # ADD this line
+            conn.execute(text("DELETE FROM click_events"))
             conn.execute(text("DELETE FROM open_events"))
             conn.execute(text("DELETE FROM email_tracking"))
             conn.commit()
@@ -631,25 +735,13 @@ def clear_database():
             'message': f'Failed to clear database: {str(e)}'
         }), 500
 
-# Initialize database
+# ============ DATABASE INITIALIZATION ============
+
 def create_tables():
     with app.app_context():
-        # db.drop_all()  # Uncomment if you want to recreate tables
         db.create_all()
-
-        # Add new columns if they don't exist
-        try:
-            with db.engine.connect() as conn:  # Use proper connection context
-                conn.execute(text('ALTER TABLE email_tracking ADD COLUMN click_count INTEGER DEFAULT 0'))
-                conn.execute(text('ALTER TABLE email_tracking ADD COLUMN last_click_time DATETIME'))
-                conn.commit()
-        except Exception as e:
-            print(f"Columns might already exist: {e}")
-            pass  # Columns already exist
-
         print("Database tables created successfully!")
 
 if __name__ == '__main__':
     create_tables()
-
     app.run(host='0.0.0.0', port=5000, debug=True)

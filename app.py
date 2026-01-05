@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, make_response, send_from_directory
+from flask import Flask, render_template, request, jsonify, make_response,send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import create_engine, text
 from flask_cors import CORS
@@ -10,26 +10,14 @@ import re
 from dotenv import load_dotenv
 import pytz
 from werkzeug.utils import secure_filename
+import os
 from PIL import Image
-import shutil
-
 load_dotenv()
 
 app = Flask(__name__, template_folder='frontend/templates', static_folder='frontend/static')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
-
-# SQLite Configuration
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DATABASE_PATH = os.path.join(BASE_DIR, 'instance', 'email_tracker.db')
-os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)  # Create instance directory
-
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DATABASE_PATH}'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_recycle': 300,
-    'connect_args': {'check_same_thread': False}  # Allow multiple threads
-}
-
 # Image upload configuration
 UPLOAD_FOLDER = 'frontend/static/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -42,7 +30,6 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
 db = SQLAlchemy(app)
 CORS(app)
 
@@ -104,36 +91,6 @@ def upload_image():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Upload failed: {str(e)}'}), 500
 
-def optimize_sqlite():
-    """Optimize SQLite for better performance"""
-    with app.app_context():
-        with db.engine.connect() as conn:
-            # Enable WAL mode for better concurrency
-            conn.execute(text("PRAGMA journal_mode=WAL"))
-            # Increase cache size
-            conn.execute(text("PRAGMA cache_size=-64000"))  # 64MB
-            # Enable foreign keys
-            conn.execute(text("PRAGMA foreign_keys=ON"))
-            # Better synchronization
-            conn.execute(text("PRAGMA synchronous=NORMAL"))
-            conn.commit()
-
-def backup_database():
-    """Create a backup of the SQLite database"""
-    try:
-        if os.path.exists(DATABASE_PATH):
-            backup_dir = os.path.join(BASE_DIR, 'backups')
-            os.makedirs(backup_dir, exist_ok=True)
-            
-            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-            backup_path = os.path.join(backup_dir, f'email_tracker_backup_{timestamp}.db')
-            
-            shutil.copy2(DATABASE_PATH, backup_path)
-            print(f"Database backed up to: {backup_path}")
-            return backup_path
-    except Exception as e:
-        print(f"Backup failed: {e}")
-    return None
 
 def get_egypt_time():
     """Get current time in Egypt timezone"""
@@ -160,8 +117,8 @@ def to_egypt_dict_time(dt):
 
     # Return ISO format that JavaScript can parse correctly
     return egypt_dt.strftime('%Y-%m-%dT%H:%M:%S%z')
-
 # Models
+
 class SMTPConfig(db.Model):
     __tablename__ = 'smtp_configs'
     id = db.Column(db.Integer, primary_key=True)
@@ -212,6 +169,7 @@ class EmailTracking(db.Model):
             'created_at': to_egypt_dict_time(self.created_at)
         }
 
+
 class ClickEvent(db.Model):
     __tablename__ = 'click_events'
     id = db.Column(db.Integer, primary_key=True)
@@ -230,6 +188,7 @@ class ClickEvent(db.Model):
             'port': self.port,
             'user_agent': self.user_agent
         }
+
 
 class OpenEvent(db.Model):
     __tablename__ = 'open_events'
@@ -272,6 +231,7 @@ def get_client_port():
 def generate_tracking_id():
     return uuid.uuid4().hex
 
+
 def create_email_body_with_image(image_url, tracking_id, redirect_url='https://www.google.com', body_text=""):
     """Create clean email body like a normal Gmail body (no extra container)."""
     base_url = request.url_root.rstrip('/')
@@ -309,6 +269,7 @@ def create_email_body_with_image(image_url, tracking_id, redirect_url='https://w
     """
 
     return html_body, click_tracking_url
+
 
 @app.route('/')
 def dashboard():
@@ -352,6 +313,7 @@ def save_smtp_config():
 
     return jsonify({'success': True, 'message': 'SMTP configuration saved successfully'})
 
+
 @app.route('/click/<tracking_id>')
 def track_click(tracking_id):
     try:
@@ -394,6 +356,7 @@ def track_click(tracking_id):
         from flask import redirect
         return redirect(redirect_url)
 
+
 @app.route('/api/smtp/test', methods=['POST'])
 def test_smtp_config():
     data = request.get_json()
@@ -429,6 +392,7 @@ def test_smtp_config():
         return jsonify({'success': True, 'message': 'Test email sent successfully'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'SMTP test failed: {str(e)}'}), 500
+
 
 @app.route('/api/send-email', methods=['POST'])
 def send_email():
@@ -471,7 +435,7 @@ def send_email():
                 db.session.add(tracking)
 
                 # Create email body with clickable image
-                email_body, click_url = create_email_body_with_image(image_url, tracking_id, redirect_url, body_text)
+                email_body, click_url = create_email_body_with_image(image_url, tracking_id, redirect_url,body_text)
 
                 # Send email
                 msg = MIMEMultipart()
@@ -514,6 +478,7 @@ def send_email():
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Failed to send emails: {str(e)}'}), 500
 
+
 @app.route('/api/tracking', methods=['GET'])
 def get_tracking_data():
     page = request.args.get('page', 1, type=int)
@@ -537,6 +502,8 @@ def get_tracking_data():
         'current_page': page,
         'per_page': per_page
     })
+
+
 
 @app.route('/track/<tracking_id>.gif')
 def track_pixel(tracking_id):
@@ -585,6 +552,8 @@ def track_pixel(tracking_id):
         response.headers['Content-Type'] = 'image/gif'
         return response
 
+
+
 @app.route('/api/tracking/<tracking_id>/details', methods=['GET'])
 def get_tracking_details(tracking_id):
     """Get detailed tracking information for a specific tracking ID"""
@@ -630,6 +599,8 @@ def get_tracking_details(tracking_id):
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
+
+
 @app.route('/api/admin/clear-database', methods=['POST'])
 def clear_database():
     """Clear all tracking data from database"""
@@ -641,21 +612,17 @@ def clear_database():
         if confirmation != 'DELETE ALL':
             return jsonify({'success': False, 'message': 'Invalid confirmation'}), 400
 
-        # Create backup before clearing
-        backup_path = backup_database()
-        
         # Delete all data
         with db.engine.connect() as conn:
             # Delete in correct order to avoid foreign key constraints
-            conn.execute(text("DELETE FROM click_events"))
+            conn.execute(text("DELETE FROM click_events"))  # ADD this line
             conn.execute(text("DELETE FROM open_events"))
             conn.execute(text("DELETE FROM email_tracking"))
             conn.commit()
 
         return jsonify({
             'success': True,
-            'message': 'All tracking data has been deleted successfully',
-            'backup_created': backup_path is not None
+            'message': 'All tracking data has been deleted successfully'
         })
 
     except Exception as e:
@@ -664,58 +631,25 @@ def clear_database():
             'message': f'Failed to clear database: {str(e)}'
         }), 500
 
-@app.route('/api/admin/backup-database', methods=['POST'])
-def api_backup_database():
-    """Create a manual backup of the database"""
-    try:
-        backup_path = backup_database()
-        if backup_path:
-            return jsonify({
-                'success': True,
-                'message': 'Database backup created successfully',
-                'backup_path': backup_path
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'message': 'Failed to create backup'
-            }), 500
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': f'Backup failed: {str(e)}'
-        }), 500
-
 # Initialize database
 def create_tables():
     with app.app_context():
+        # db.drop_all()  # Uncomment if you want to recreate tables
+        db.create_all()
+
+        # Add new columns if they don't exist
         try:
-            db.create_all()
-            optimize_sqlite()  # Optimize SQLite performance
-            
-            # Add new columns if they don't exist
-            try:
-                with db.engine.connect() as conn:
-                    # Check if columns exist before adding
-                    result = conn.execute(text("PRAGMA table_info(email_tracking)"))
-                    existing_columns = [row[1] for row in result]
-                    
-                    if 'click_count' not in existing_columns:
-                        conn.execute(text('ALTER TABLE email_tracking ADD COLUMN click_count INTEGER DEFAULT 0'))
-                        print("Added click_count column")
-                    if 'last_click_time' not in existing_columns:
-                        conn.execute(text('ALTER TABLE email_tracking ADD COLUMN last_click_time DATETIME'))
-                        print("Added last_click_time column")
-                    conn.commit()
-            except Exception as e:
-                print(f"Column check completed: {e}")
-            
-            print("SQLite database initialized successfully!")
-            print(f"Database location: {DATABASE_PATH}")
-            
+            with db.engine.connect() as conn:  # Use proper connection context
+                conn.execute(text('ALTER TABLE email_tracking ADD COLUMN click_count INTEGER DEFAULT 0'))
+                conn.execute(text('ALTER TABLE email_tracking ADD COLUMN last_click_time DATETIME'))
+                conn.commit()
         except Exception as e:
-            print(f"Database initialization error: {e}")
+            print(f"Columns might already exist: {e}")
+            pass  # Columns already exist
+
+        print("Database tables created successfully!")
 
 if __name__ == '__main__':
     create_tables()
+
     app.run(host='0.0.0.0', port=5000, debug=True)

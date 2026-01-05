@@ -2,7 +2,7 @@ services:
   web:
     build: .
     ports:
-      - "5000:5000"
+      - "5000:5000"  # Keep this for direct access if needed
     depends_on:
       - db
     environment:
@@ -10,6 +10,8 @@ services:
     volumes:
       - .:/app
     working_dir: /app
+    networks:
+      - app-network
 
   db:
     image: mysql:8.0
@@ -22,6 +24,8 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin:latest
@@ -30,10 +34,26 @@ services:
       PMA_HOST: db
       PMA_PORT: 3306
     ports:
-      - "8080:80"   # change host port to avoid conflict
+      - "8080:80"
     depends_on:
       - db
+    networks:
+      - app-network
 
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - web
+    networks:
+      - app-network
 
 volumes:
   mysql_data:
+
+networks:
+  app-network:
+    driver: bridge
